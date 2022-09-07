@@ -89,6 +89,10 @@ type SecretStoreProvider struct {
 	// Fake configures a store with static key/value pairs
 	// +optional
 	Fake *FakeProvider `json:"fake,omitempty"`
+
+	// Doppler configures this store to sync secrets using the Doppler provider
+	// +optional
+	Doppler *DopplerProvider `json:"doppler,omitempty"`
 }
 
 type SecretStoreRetrySettings struct {

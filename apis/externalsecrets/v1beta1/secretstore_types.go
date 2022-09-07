@@ -105,6 +105,10 @@ type SecretStoreProvider struct {
 	// Senhasegura configures this store to sync secrets using senhasegura provider
 	// +optional
 	Senhasegura *SenhaseguraProvider `json:"senhasegura,omitempty"`
+
+	// Doppler configures this store to sync secrets using the Doppler provider
+	// +optional
+	Doppler *DopplerProvider `json:"doppler,omitempty"`
 }
 
 type CAProviderType string
