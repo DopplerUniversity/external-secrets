@@ -2947,7 +2947,7 @@ string
 <td>
 <code>nameTransformer</code></br>
 <em>
-github.com/DopplerUniversity/doppler-secrets-client-go.NameTransformer
+string
 </em>
 </td>
 <td>
@@ -2959,12 +2959,12 @@ github.com/DopplerUniversity/doppler-secrets-client-go.NameTransformer
 <td>
 <code>format</code></br>
 <em>
-github.com/DopplerUniversity/doppler-secrets-client-go.Format
+string
 </em>
 </td>
 <td>
 <em>(Optional)</em>
-<p>Specifying Format defeats population of Key=Value. Only a  single &lsquo;secrets&rsquo; key with the format value is created.</p>
+<p>Format enables the downloading of secrets as a file (string)</p>
 </td>
 </tr>
 <tr>
@@ -2983,7 +2983,7 @@ bool
 <td>
 <code>dynamicSecretsTTL</code></br>
 <em>
-int32
+int64
 </em>
 </td>
 <td>
