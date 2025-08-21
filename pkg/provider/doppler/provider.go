@@ -20,12 +20,14 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	kclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	dClient "github.com/external-secrets/external-secrets/pkg/provider/doppler/client"
+	"github.com/external-secrets/external-secrets/pkg/provider/doppler/constants"
 	"github.com/external-secrets/external-secrets/pkg/utils"
 )
 
@@ -53,6 +55,10 @@ func (p *Provider) Capabilities() esv1.SecretStoreCapabilities {
 }
 
 func (p *Provider) NewClient(ctx context.Context, store esv1.GenericStore, kube kclient.Client, namespace string) (esv1.SecretsClient, error) {
+	var err error
+	var retryAmount = 0
+	var retryDuration = 0 * time.Second
+
 	storeSpec := store.GetSpec()
 
 	if storeSpec == nil || storeSpec.Provider == nil || storeSpec.Provider.Doppler == nil {
@@ -66,7 +72,29 @@ func (p *Provider) NewClient(ctx context.Context, store esv1.GenericStore, kube 
 		storeSpec.Provider.Doppler.Auth.SecretRef.DopplerToken.Key = "dopplerToken"
 	}
 
+	// Setup retry options, but only if present
+	if storeSpec.RetrySettings != nil {
+		if storeSpec.RetrySettings.MaxRetries != nil {
+			retryAmount = int(*storeSpec.RetrySettings.MaxRetries)
+		} else {
+			retryAmount = constants.DefaultRetryAmount
+		}
+
+		if storeSpec.RetrySettings.RetryInterval != nil {
+			retryDuration, err = time.ParseDuration(*storeSpec.RetrySettings.RetryInterval)
+		} else {
+			retryDuration = constants.DefaultRetryDuration
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf(errNewClient, err)
+		}
+	}
+
 	client := &Client{
+		retryAmount:   retryAmount,
+		retryDuration: retryDuration,
+
 		kube:      kube,
 		store:     dopplerStoreSpec,
 		namespace: namespace,
@@ -77,7 +105,7 @@ func (p *Provider) NewClient(ctx context.Context, store esv1.GenericStore, kube 
 		return nil, err
 	}
 
-	doppler, err := dClient.NewDopplerClient(client.dopplerToken)
+	doppler, err := dClient.NewDopplerClient(client.dopplerToken, client.retryAmount, client.retryDuration)
 	if err != nil {
 		return nil, fmt.Errorf(errNewClient, err)
 	}

@@ -20,17 +20,37 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/external-secrets/external-secrets/pkg/provider/doppler/constants"
 )
 
+// RetryProvider allows for dynamically customizing various aspects of the retry
+// behavior. Notably, we alter how SleepDuration() works in tests to avoid keep
+// the tests in constant time while still being able check expected sleep durations.
+type RetryProvider interface {
+	MinRetryDelay() time.Duration
+	MaxRetryDelay() time.Duration
+	MaxBackoffMultiplier() time.Duration
+	JitterDuration(delay time.Duration) time.Duration
+	RetryAmount() int
+	RetryDuration() time.Duration
+	RetryDurationHistory() []int
+	BackoffDuration(attempt int) time.Duration
+	RatelimitDuration(retryAfterHeader string) time.Duration
+	SleepDuration(attempt int, retryAfterHeader string) time.Duration
+}
+
 type DopplerClient struct {
-	baseURL      *url.URL
-	DopplerToken string
-	VerifyTLS    bool
-	UserAgent    string
+	baseURL       *url.URL
+	retryProvider RetryProvider
+	DopplerToken  string
+	VerifyTLS     bool
+	UserAgent     string
 }
 
 type queryParams map[string]string
@@ -107,11 +127,101 @@ type SecretsResponse struct {
 	ETag     string
 }
 
-func NewDopplerClient(dopplerToken string) (*DopplerClient, error) {
+const (
+	// HttpRequestTimeout is the timeout period we allow for HTTP requests
+	HttpRequestTimeout = 10 * time.Second
+)
+
+type DefaultRetryProvider struct {
+	retryAmount   int
+	retryDuration time.Duration
+}
+
+func (rp *DefaultRetryProvider) MinRetryDelay() time.Duration {
+	return constants.MinAllowedDelay
+}
+
+func (rp *DefaultRetryProvider) MaxRetryDelay() time.Duration {
+	return constants.MaxAllowedDelay
+}
+
+func (rp *DefaultRetryProvider) MaxBackoffMultiplier() time.Duration {
+	return constants.MaxBackoffMultiplier
+}
+
+func (rp *DefaultRetryProvider) JitterDuration(delay time.Duration) time.Duration {
+	return time.Duration(float64(delay) * constants.JitterMultiplier * (2*rand.Float64() - 1))
+}
+
+func (rp *DefaultRetryProvider) RetryAmount() int {
+	return rp.retryAmount
+}
+
+func (rp *DefaultRetryProvider) RetryDuration() time.Duration {
+	return rp.retryDuration
+}
+
+// This is only used for tests, so we just return an empty slice here
+func (rp *DefaultRetryProvider) RetryDurationHistory() []int {
+	return []int{}
+}
+
+func (rp *DefaultRetryProvider) BackoffDuration(attempt int) time.Duration {
+	minDelay := rp.MinRetryDelay()
+
+	// Ensure the baseDelay doesn't exceed the max or minimum values
+	baseDelay := max(rp.RetryDuration(), minDelay)
+	baseDelay = min(baseDelay, rp.MaxRetryDelay())
+
+	// Exponential backoff is 2^attempt, capped at MaxBackoffMultiplier
+	multiplier := min(1<<uint(attempt), rp.MaxBackoffMultiplier())
+
+	delay := baseDelay * time.Duration(multiplier)
+
+	// Ensure delay never goes below the minimum
+	delay = max(delay, minDelay)
+
+	return delay
+}
+
+func (rp *DefaultRetryProvider) RatelimitDuration(retryAfterHeader string) time.Duration {
+	if retryAfterHeader == "" {
+		return 0
+	}
+
+	duration, err := time.ParseDuration(retryAfterHeader + "s")
+	if err != nil {
+		return 0
+	}
+
+	return duration
+}
+
+func (rp *DefaultRetryProvider) SleepDuration(attempt int, retryAfterHeader string) time.Duration {
+	var delay time.Duration
+
+	// If there's a ratelimit retry-after header, just use that
+	if ratelimitDelay := rp.RatelimitDuration(retryAfterHeader); ratelimitDelay > 0 {
+		delay = ratelimitDelay
+	} else {
+		delay = rp.BackoffDuration(attempt)
+
+		// Introduce jitter to the delay time to avoid thundering herd
+		delay += rp.JitterDuration(delay)
+	}
+
+	return delay
+}
+
+func NewDopplerClient(dopplerToken string, retryAmount int, retryDuration time.Duration) (*DopplerClient, error) {
 	client := &DopplerClient{
 		DopplerToken: dopplerToken,
 		VerifyTLS:    true,
 		UserAgent:    "doppler-external-secrets",
+		retryProvider: &DefaultRetryProvider{
+			retryAmount:   retryAmount,
+			retryDuration: retryDuration,
+		},
 	}
 
 	if err := client.SetBaseURL("https://api.doppler.com"); err != nil {
@@ -253,6 +363,39 @@ func (r *SecretsRequest) buildQueryParams() queryParams {
 }
 
 func (c *DopplerClient) performRequest(path, method string, headers headers, params queryParams, body httpRequestBody) (*apiResponse, error) {
+	maxRetries := min(c.retryProvider.RetryAmount(), constants.MaxAllowedRetries)
+
+	var response *apiResponse
+	var err error
+
+	// <= ensures that we'll perform maxRetries+1 loops. The initial loop always
+	// performs the initial request. If it fails, we then perform the user-specified
+	// number of retries (with a RetryCeiling max).
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		response, err = c.doHTTPRequest(path, method, headers, params, body)
+
+		if err == nil {
+			return response, nil
+		}
+
+		// < here ensures that we don't sleep after our last retry attempt.
+		if attempt < maxRetries {
+			retryAfter := ""
+			if response != nil && isRateLimited(response.HTTPResponse.StatusCode) {
+				rateLimit := response.HTTPResponse.Header.Get("x-ratelimit-limit")
+				retryAfter = response.HTTPResponse.Header.Get("retry-after")
+				fmt.Printf("warn: Doppler ratelimit of %s reqs/min reached. retrying in %s second(s)...\n", rateLimit, retryAfter)
+			}
+			sleepDuration := c.retryProvider.SleepDuration(attempt, retryAfter)
+			time.Sleep(sleepDuration)
+		}
+	}
+
+	return response, err
+}
+
+// doHTTPRequest performs a single HTTP request without retry logic
+func (c *DopplerClient) doHTTPRequest(path, method string, headers headers, params queryParams, body httpRequestBody) (*apiResponse, error) {
 	urlStr := c.BaseURL().String() + path
 	reqURL, err := url.Parse(urlStr)
 	if err != nil {
@@ -262,8 +405,6 @@ func (c *DopplerClient) performRequest(path, method string, headers headers, par
 	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
-	} else {
-		bodyReader = http.NoBody
 	}
 
 	req, err := http.NewRequest(method, reqURL.String(), bodyReader)
@@ -279,7 +420,7 @@ func (c *DopplerClient) performRequest(path, method string, headers headers, par
 		req.Header.Set("accept", "application/json")
 	}
 	req.Header.Set("user-agent", c.UserAgent)
-	req.SetBasicAuth(c.DopplerToken, "")
+	req.Header.Set("authorization", "Bearer "+c.DopplerToken)
 
 	for key, value := range headers {
 		req.Header.Set(key, value)
@@ -291,19 +432,17 @@ func (c *DopplerClient) performRequest(path, method string, headers headers, par
 	}
 	req.URL.RawQuery = query.Encode()
 
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-
 	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: !c.VerifyTLS,
 	}
 
-	if !c.VerifyTLS {
-		tlsConfig.InsecureSkipVerify = true
-	}
-
-	httpClient.Transport = &http.Transport{
-		DisableKeepAlives: true,
-		TLSClientConfig:   tlsConfig,
+	httpClient := &http.Client{
+		Timeout: HttpRequestTimeout,
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+			TLSClientConfig:   tlsConfig,
+		},
 	}
 
 	r, err := httpClient.Do(req)
@@ -320,28 +459,36 @@ func (c *DopplerClient) performRequest(path, method string, headers headers, par
 	}
 
 	response := &apiResponse{HTTPResponse: r, Body: bodyResponse}
-	success := isSuccess(r.StatusCode)
 
-	if !success {
-		if contentType := r.Header.Get("content-type"); strings.HasPrefix(contentType, "application/json") {
-			var errResponse apiErrorResponse
-			err := json.Unmarshal(bodyResponse, &errResponse)
-			if err != nil {
-				return response, &APIError{Err: err, Message: "unable to unmarshal error JSON payload"}
-			}
-			return response, &APIError{Err: nil, Message: strings.Join(errResponse.Messages, "\n")}
-		}
-		return nil, &APIError{Err: fmt.Errorf("%d status code; %d bytes", r.StatusCode, len(bodyResponse)), Message: "unable to load response"}
+	if !isSuccess(r.StatusCode) {
+		return response, c.handleErrorResponse(r, bodyResponse)
 	}
 
-	if success && err != nil {
-		return nil, &APIError{Err: err, Message: "unable to load data from successful response"}
-	}
 	return response, nil
+}
+
+func (c *DopplerClient) handleErrorResponse(resp *http.Response, bodyResponse []byte) error {
+	contentType := resp.Header.Get("content-type")
+	if strings.HasPrefix(contentType, "application/json") {
+		var errResponse apiErrorResponse
+		if err := json.Unmarshal(bodyResponse, &errResponse); err != nil {
+			return &APIError{Err: err, Message: "unable to unmarshal error JSON payload"}
+		}
+		return &APIError{Err: nil, Message: strings.Join(errResponse.Messages, "\n")}
+	}
+
+	return &APIError{
+		Err:     fmt.Errorf("%d status code; %d bytes", resp.StatusCode, len(bodyResponse)),
+		Message: "unable to load response",
+	}
 }
 
 func isSuccess(statusCode int) bool {
 	return (statusCode >= 200 && statusCode <= 299) || (statusCode >= 300 && statusCode <= 399)
+}
+
+func isRateLimited(statusCode int) bool {
+	return statusCode == 429
 }
 
 func (e *APIError) Error() string {

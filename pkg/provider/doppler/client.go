@@ -53,6 +53,8 @@ type Client struct {
 	config          string
 	nameTransformer string
 	format          string
+	retryAmount     int
+	retryDuration   time.Duration
 
 	kube      kclient.Client
 	store     *esv1.DopplerProvider
