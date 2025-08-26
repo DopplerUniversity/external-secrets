@@ -1,4 +1,4 @@
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: example
@@ -17,3 +17,4 @@ spec:
   dataFrom:
   - extract:
       key: /foo/baz
+      version: v1

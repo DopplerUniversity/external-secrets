@@ -1,4 +1,4 @@
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: ibm-sample
@@ -16,6 +16,12 @@ spec:
   - secretKey: iam_cred
     remoteRef:
       key: iam_credentials/zzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz
+  - secretKey: srv_cred
+    remoteRef:
+      key: service_credentials/zzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz
+  - secretKey: cstm_cred
+    remoteRef:
+      key: custom_credentials/zzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz
   - secretKey: imp_cert
     remoteRef:
       key: imported_cert/zzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz
@@ -25,9 +31,9 @@ spec:
       key: public_cert/zzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz
       property: certificate
   - secretKey: prvt_cert
-      remoteRef:
-        key: private_cert/zzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz
-        property: certificate
+    remoteRef:
+      key: private_cert/zzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz
+      property: certificate
   - secretKey: kv_without_key
     remoteRef:
       key: kv/zzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz
@@ -39,5 +45,3 @@ spec:
     remoteRef:
       key: kv/zzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz
       property: 'key.path'
-  dataFrom:
-
