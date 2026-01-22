@@ -151,6 +151,8 @@ func (c *Client) DeleteSecret(ctx context.Context, ref esv1.PushSecretRemoteRef)
 		return fmt.Errorf(errDeleteSecrets, ref.GetRemoteKey(), err)
 	}
 
+	globalSecretsCache.invalidate(c.project, c.config)
+
 	return nil
 }
 
@@ -176,6 +178,8 @@ func (c *Client) PushSecret(ctx context.Context, secret *corev1.Secret, data esv
 	if err != nil {
 		return fmt.Errorf(errPushSecrets, data.GetRemoteKey(), err)
 	}
+
+	globalSecretsCache.invalidate(c.project, c.config)
 
 	return nil
 }
@@ -266,17 +270,40 @@ func (c *Client) secrets(ctx context.Context) (map[string][]byte, error) {
 	if err := c.refreshAuthIfNeeded(ctx); err != nil {
 		return nil, err
 	}
+
+	var etag string
+	cached, hasCached := globalSecretsCache.get(c.project, c.config, c.format, c.nameTransformer)
+	if hasCached {
+		etag = cached.etag
+	}
+
 	request := dclient.SecretsRequest{
 		Project:         c.project,
 		Config:          c.config,
 		NameTransformer: c.nameTransformer,
 		Format:          c.format,
+		ETag:            etag,
 	}
 
 	response, err := c.doppler.GetSecrets(request)
 	if err != nil {
 		return nil, fmt.Errorf(errGetSecrets, err)
 	}
+
+	if !response.Modified && hasCached {
+		if c.format != "" {
+			return map[string][]byte{
+				secretsDownloadFileKey: cached.body,
+			}, nil
+		}
+		return externalSecretsFormat(cached.secrets), nil
+	}
+
+	globalSecretsCache.set(c.project, c.config, c.format, c.nameTransformer, &cacheEntry{
+		etag:    response.ETag,
+		secrets: response.Secrets,
+		body:    response.Body,
+	})
 
 	if c.format != "" {
 		return map[string][]byte{
