@@ -17,6 +17,7 @@ limitations under the License.
 package doppler
 
 import (
+	"strings"
 	"sync"
 
 	dclient "github.com/external-secrets/external-secrets/providers/v1/doppler/client"
@@ -54,9 +55,13 @@ type storeIdentity struct {
 	kind      string
 }
 
-func cacheKey(store storeIdentity, project, config, format, nameTransformer string) cache.Key {
+func cacheKey(store storeIdentity, project, config, format, nameTransformer string, secrets []string) cache.Key {
+	secretsKey := ""
+	if len(secrets) > 0 {
+		secretsKey = strings.Join(secrets, ",")
+	}
 	return cache.Key{
-		Name:      store.name + "|" + project + "|" + config + "|" + format + "|" + nameTransformer,
+		Name:      store.name + "|" + project + "|" + config + "|" + format + "|" + nameTransformer + "|" + secretsKey,
 		Namespace: store.namespace,
 		Kind:      store.kind,
 	}
@@ -66,19 +71,19 @@ func prefixKey(store storeIdentity, project, config string) string {
 	return store.namespace + "|" + store.name + "|" + store.kind + "|" + project + "|" + config
 }
 
-func (c *secretsCache) get(store storeIdentity, project, config, format, nameTransformer string) (*cacheEntry, bool) {
+func (c *secretsCache) get(store storeIdentity, project, config, format, nameTransformer string, secrets []string) (*cacheEntry, bool) {
 	if c == nil || c.cache == nil {
 		return nil, false
 	}
-	key := cacheKey(store, project, config, format, nameTransformer)
+	key := cacheKey(store, project, config, format, nameTransformer, secrets)
 	return c.cache.Get(etagCacheVersion, key)
 }
 
-func (c *secretsCache) set(store storeIdentity, project, config, format, nameTransformer string, entry *cacheEntry) {
+func (c *secretsCache) set(store storeIdentity, project, config, format, nameTransformer string, secrets []string, entry *cacheEntry) {
 	if c == nil || c.cache == nil {
 		return
 	}
-	key := cacheKey(store, project, config, format, nameTransformer)
+	key := cacheKey(store, project, config, format, nameTransformer, secrets)
 	c.cache.Add(etagCacheVersion, key, entry)
 
 	c.keysMu.Lock()

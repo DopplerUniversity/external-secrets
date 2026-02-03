@@ -198,18 +198,36 @@ func (c *Client) GetSecret(ctx context.Context, ref esv1.ExternalSecretDataRemot
 	if err := c.refreshAuthIfNeeded(ctx); err != nil {
 		return nil, err
 	}
+
+	secretFilter := []string{ref.Key}
+	var etag string
+	cached, hasCached := etagCache.get(c.storeIdentity(), c.project, c.config, "", "", secretFilter)
+	if hasCached {
+		etag = cached.etag
+	}
+
 	request := dclient.SecretRequest{
 		Name:    ref.Key,
 		Project: c.project,
 		Config:  c.config,
+		ETag:    etag,
 	}
 
-	secret, err := c.doppler.GetSecret(request)
+	response, err := c.doppler.GetSecret(request)
 	if err != nil {
 		return nil, fmt.Errorf(errGetSecret, ref.Key, err)
 	}
 
-	return []byte(secret.Value), nil
+	if !response.Modified && hasCached {
+		return []byte(cached.secrets[ref.Key]), nil
+	}
+
+	etagCache.set(c.storeIdentity(), c.project, c.config, "", "", secretFilter, &cacheEntry{
+		etag:    response.ETag,
+		secrets: dclient.Secrets{response.Name: response.Value},
+	})
+
+	return []byte(response.Value), nil
 }
 
 // GetSecretMap retrieves a secret from Doppler and returns it as a map.
@@ -281,7 +299,7 @@ func (c *Client) secrets(ctx context.Context) (map[string][]byte, error) {
 	}
 
 	var etag string
-	cached, hasCached := etagCache.get(c.storeIdentity(), c.project, c.config, c.format, c.nameTransformer)
+	cached, hasCached := etagCache.get(c.storeIdentity(), c.project, c.config, c.format, c.nameTransformer, nil)
 	if hasCached {
 		etag = cached.etag
 	}
@@ -308,7 +326,7 @@ func (c *Client) secrets(ctx context.Context) (map[string][]byte, error) {
 		return externalSecretsFormat(cached.secrets), nil
 	}
 
-	etagCache.set(c.storeIdentity(), c.project, c.config, c.format, c.nameTransformer, &cacheEntry{
+	etagCache.set(c.storeIdentity(), c.project, c.config, c.format, c.nameTransformer, nil, &cacheEntry{
 		etag:    response.ETag,
 		secrets: response.Secrets,
 		body:    response.Body,

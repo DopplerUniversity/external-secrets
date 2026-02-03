@@ -90,3 +90,9 @@ func (dc *DopplerClient) WithSecretsFunc(fn func(request client.SecretsRequest) 
 		dc.getSecrets = fn
 	}
 }
+
+func (dc *DopplerClient) WithSecretFunc(fn func(request client.SecretRequest) (*client.SecretResponse, error)) {
+	if dc != nil {
+		dc.getSecret = fn
+	}
+}

@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 
+	esv1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1"
 	esv1alpha1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1alpha1"
 	"github.com/external-secrets/external-secrets/providers/v1/doppler/client"
 	"github.com/external-secrets/external-secrets/providers/v1/doppler/fake"
@@ -36,6 +37,9 @@ const testETagValue = "etag-123"
 
 // testCacheSize is used in tests to create caches with sufficient capacity.
 const testCacheSize = 100
+
+const testAPIKeyValue = "secret-value"
+const testDBPassValue = "password"
 
 // testStore is a default store identity used in tests.
 var testStore = storeIdentity{
@@ -53,18 +57,21 @@ func TestCacheKey(t *testing.T) {
 		config          string
 		format          string
 		nameTransformer string
+		secrets         []string
 		expected        cache.Key
 	}{
-		{store, "my-project", "dev", "", "", cache.Key{Name: "store|my-project|dev||", Namespace: "ns", Kind: "SecretStore"}},
-		{store, "my-project", "dev", "json", "", cache.Key{Name: "store|my-project|dev|json|", Namespace: "ns", Kind: "SecretStore"}},
-		{store, "my-project", "dev", "", "lower-snake", cache.Key{Name: "store|my-project|dev||lower-snake", Namespace: "ns", Kind: "SecretStore"}},
-		{store, "my-project", "dev", "env", "camel", cache.Key{Name: "store|my-project|dev|env|camel", Namespace: "ns", Kind: "SecretStore"}},
+		{store, "my-project", "dev", "", "", nil, cache.Key{Name: "store|my-project|dev|||", Namespace: "ns", Kind: "SecretStore"}},
+		{store, "my-project", "dev", "json", "", nil, cache.Key{Name: "store|my-project|dev|json||", Namespace: "ns", Kind: "SecretStore"}},
+		{store, "my-project", "dev", "", "lower-snake", nil, cache.Key{Name: "store|my-project|dev||lower-snake|", Namespace: "ns", Kind: "SecretStore"}},
+		{store, "my-project", "dev", "env", "camel", nil, cache.Key{Name: "store|my-project|dev|env|camel|", Namespace: "ns", Kind: "SecretStore"}},
+		{store, "my-project", "dev", "", "", []string{"API_KEY"}, cache.Key{Name: "store|my-project|dev|||API_KEY", Namespace: "ns", Kind: "SecretStore"}},
+		{store, "my-project", "dev", "", "", []string{"API_KEY", "DB_PASS"}, cache.Key{Name: "store|my-project|dev|||API_KEY,DB_PASS", Namespace: "ns", Kind: "SecretStore"}},
 	}
 
 	for _, tt := range tests {
-		result := cacheKey(tt.store, tt.project, tt.config, tt.format, tt.nameTransformer)
+		result := cacheKey(tt.store, tt.project, tt.config, tt.format, tt.nameTransformer, tt.secrets)
 		if result != tt.expected {
-			t.Errorf("cacheKey(%v, %q, %q, %q, %q) = %v, want %v", tt.store, tt.project, tt.config, tt.format, tt.nameTransformer, result, tt.expected)
+			t.Errorf("cacheKey(%v, %q, %q, %q, %q, %v) = %v, want %v", tt.store, tt.project, tt.config, tt.format, tt.nameTransformer, tt.secrets, result, tt.expected)
 		}
 	}
 }
@@ -72,7 +79,7 @@ func TestCacheKey(t *testing.T) {
 func TestSecretsCacheGetSet(t *testing.T) {
 	c := newSecretsCache(testCacheSize)
 
-	entry, found := c.get(testStore, "project", "config", "", "")
+	entry, found := c.get(testStore, "project", "config", "", "", nil)
 	if found || entry != nil {
 		t.Error("expected empty cache to return nil, false")
 	}
@@ -82,9 +89,9 @@ func TestSecretsCacheGetSet(t *testing.T) {
 		secrets: client.Secrets{"KEY": "value"},
 		body:    []byte("test body"),
 	}
-	c.set(testStore, "project", "config", "", "", testEntry)
+	c.set(testStore, "project", "config", "", "", nil, testEntry)
 
-	entry, found = c.get(testStore, "project", "config", "", "")
+	entry, found = c.get(testStore, "project", "config", "", "", nil)
 	if !found {
 		t.Error("expected cache hit after set")
 	}
@@ -95,24 +102,24 @@ func TestSecretsCacheGetSet(t *testing.T) {
 		t.Errorf("expected secrets %v, got %v", testEntry.secrets, entry.secrets)
 	}
 
-	entry, found = c.get(testStore, "other-project", "config", "", "")
+	entry, found = c.get(testStore, "other-project", "config", "", "", nil)
 	if found || entry != nil {
 		t.Error("expected cache miss for different project")
 	}
 
-	entry, found = c.get(testStore, "project", "config", "env", "")
+	entry, found = c.get(testStore, "project", "config", "env", "", nil)
 	if found || entry != nil {
 		t.Error("expected cache miss for different format")
 	}
 
-	entry, found = c.get(testStore, "project", "config", "", "lower-snake")
+	entry, found = c.get(testStore, "project", "config", "", "lower-snake", nil)
 	if found || entry != nil {
 		t.Error("expected cache miss for different nameTransformer")
 	}
 
 	// Different store should not see the entry
 	otherStore := storeIdentity{namespace: "other-ns", name: "other-store", kind: "SecretStore"}
-	entry, found = c.get(otherStore, "project", "config", "", "")
+	entry, found = c.get(otherStore, "project", "config", "", "", nil)
 	if found || entry != nil {
 		t.Error("expected cache miss for different store")
 	}
@@ -125,36 +132,36 @@ func TestSecretsCacheInvalidate(t *testing.T) {
 		etag:    "test-etag",
 		secrets: client.Secrets{"KEY": "value"},
 	}
-	c.set(testStore, "project", "config", "", "", testEntry)
-	c.set(testStore, "project", "config", "env", "", testEntry)
-	c.set(testStore, "project", "config", "", "lower-snake", testEntry)
-	c.set(testStore, "other-project", "config", "", "", testEntry)
+	c.set(testStore, "project", "config", "", "", nil, testEntry)
+	c.set(testStore, "project", "config", "env", "", nil, testEntry)
+	c.set(testStore, "project", "config", "", "lower-snake", nil, testEntry)
+	c.set(testStore, "other-project", "config", "", "", nil, testEntry)
 
-	_, found := c.get(testStore, "project", "config", "", "")
+	_, found := c.get(testStore, "project", "config", "", "", nil)
 	if !found {
 		t.Error("expected cache hit before invalidate")
 	}
-	_, found = c.get(testStore, "project", "config", "env", "")
+	_, found = c.get(testStore, "project", "config", "env", "", nil)
 	if !found {
 		t.Error("expected cache hit for env format before invalidate")
 	}
 
 	c.invalidate(testStore, "project", "config")
 
-	_, found = c.get(testStore, "project", "config", "", "")
+	_, found = c.get(testStore, "project", "config", "", "", nil)
 	if found {
 		t.Error("expected cache miss after invalidate")
 	}
-	_, found = c.get(testStore, "project", "config", "env", "")
+	_, found = c.get(testStore, "project", "config", "env", "", nil)
 	if found {
 		t.Error("expected cache miss for env format after invalidate")
 	}
-	_, found = c.get(testStore, "project", "config", "", "lower-snake")
+	_, found = c.get(testStore, "project", "config", "", "lower-snake", nil)
 	if found {
 		t.Error("expected cache miss for lower-snake after invalidate")
 	}
 
-	_, found = c.get(testStore, "other-project", "config", "", "")
+	_, found = c.get(testStore, "other-project", "config", "", "", nil)
 	if !found {
 		t.Error("expected other-project cache to remain after invalidate")
 	}
@@ -176,8 +183,8 @@ func TestSecretsCacheConcurrency(t *testing.T) {
 					etag:    "etag",
 					secrets: client.Secrets{"KEY": "value"},
 				}
-				c.set(testStore, "project", "config", "", "", entry)
-				c.get(testStore, "project", "config", "", "")
+				c.set(testStore, "project", "config", "", "", nil, entry)
+				c.get(testStore, "project", "config", "", "", nil)
 				if j%10 == 0 {
 					c.invalidate(testStore, "project", "config")
 				}
@@ -194,7 +201,7 @@ func TestGetAllSecretsUsesCache(t *testing.T) {
 	fakeClient := &fake.DopplerClient{}
 
 	var callCount atomic.Int32
-	testSecrets := client.Secrets{"API_KEY": "secret-value", "DB_PASS": "password"}
+	testSecrets := client.Secrets{"API_KEY": testAPIKeyValue, "DB_PASS": testDBPassValue}
 	testETag := testETagValue
 
 	fakeClient.WithSecretsFunc(func(request client.SecretsRequest) (*client.SecretsResponse, error) {
@@ -236,8 +243,8 @@ func TestGetAllSecretsUsesCache(t *testing.T) {
 	if len(secrets) != 2 {
 		t.Errorf("expected 2 secrets, got %d", len(secrets))
 	}
-	if string(secrets["API_KEY"]) != "secret-value" {
-		t.Errorf("expected API_KEY=secret-value, got %s", secrets["API_KEY"])
+	if string(secrets["API_KEY"]) != testAPIKeyValue {
+		t.Errorf("expected API_KEY=%s, got %s", testAPIKeyValue, secrets["API_KEY"])
 	}
 
 	secrets, err = c.secrets(context.Background())
@@ -250,6 +257,92 @@ func TestGetAllSecretsUsesCache(t *testing.T) {
 
 	if callCount.Load() != 2 {
 		t.Errorf("expected 2 API calls, got %d", callCount.Load())
+	}
+}
+
+func TestGetSecretUsesCache(t *testing.T) {
+	etagCache = newSecretsCache(testCacheSize)
+
+	fakeClient := &fake.DopplerClient{}
+
+	var callCount atomic.Int32
+	apiKeyETag := "etag-api-key"
+	dbPassETag := "etag-db-pass"
+
+	fakeClient.WithSecretFunc(func(request client.SecretRequest) (*client.SecretResponse, error) {
+		callCount.Add(1)
+
+		secretName := request.Name
+		var expectedETag string
+		var secretValue string
+
+		switch secretName {
+		case "API_KEY":
+			expectedETag = apiKeyETag
+			secretValue = testAPIKeyValue
+		case "DB_PASS":
+			expectedETag = dbPassETag
+			secretValue = testDBPassValue
+		default:
+			t.Errorf("unexpected secret requested: %s", secretName)
+			return nil, nil
+		}
+
+		if request.ETag == expectedETag {
+			return &client.SecretResponse{Modified: false, ETag: expectedETag}, nil
+		}
+
+		return &client.SecretResponse{
+			Name:     secretName,
+			Value:    secretValue,
+			Modified: true,
+			ETag:     expectedETag,
+		}, nil
+	})
+
+	c := &Client{
+		doppler:   fakeClient,
+		project:   "test-project",
+		config:    "test-config",
+		namespace: "test-namespace",
+		storeName: "test-store",
+		storeKind: "SecretStore",
+	}
+
+	secret, err := c.GetSecret(context.Background(), esv1.ExternalSecretDataRemoteRef{Key: "API_KEY"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(secret) != testAPIKeyValue {
+		t.Errorf("expected %s, got %s", testAPIKeyValue, secret)
+	}
+
+	secret, err = c.GetSecret(context.Background(), esv1.ExternalSecretDataRemoteRef{Key: "API_KEY"})
+	if err != nil {
+		t.Fatalf("unexpected error on second call: %v", err)
+	}
+	if string(secret) != testAPIKeyValue {
+		t.Errorf("expected %s on second call, got %s", testAPIKeyValue, secret)
+	}
+
+	secret, err = c.GetSecret(context.Background(), esv1.ExternalSecretDataRemoteRef{Key: "DB_PASS"})
+	if err != nil {
+		t.Fatalf("unexpected error for DB_PASS: %v", err)
+	}
+	if string(secret) != testDBPassValue {
+		t.Errorf("expected %s, got %s", testDBPassValue, secret)
+	}
+
+	secret, err = c.GetSecret(context.Background(), esv1.ExternalSecretDataRemoteRef{Key: "DB_PASS"})
+	if err != nil {
+		t.Fatalf("unexpected error on second DB_PASS call: %v", err)
+	}
+	if string(secret) != testDBPassValue {
+		t.Errorf("expected %s on second call, got %s", testDBPassValue, secret)
+	}
+
+	if callCount.Load() != 4 {
+		t.Errorf("expected 4 API calls, got %d", callCount.Load())
 	}
 }
 
@@ -310,7 +403,7 @@ func TestCacheInvalidationOnPushSecret(t *testing.T) {
 	}
 
 	storeID := c.storeIdentity()
-	entry, found := etagCache.get(storeID, "test-project", "test-config", "", "")
+	entry, found := etagCache.get(storeID, "test-project", "test-config", "", "", nil)
 	if !found {
 		t.Error("expected cache to be populated after first call")
 	}
@@ -336,7 +429,7 @@ func TestCacheInvalidationOnPushSecret(t *testing.T) {
 		t.Fatalf("unexpected error pushing secret: %v", err)
 	}
 
-	_, found = etagCache.get(storeID, "test-project", "test-config", "", "")
+	_, found = etagCache.get(storeID, "test-project", "test-config", "", "", nil)
 	if found {
 		t.Error("expected cache to be invalidated after push")
 	}
@@ -394,7 +487,7 @@ func TestCacheInvalidationOnDeleteSecret(t *testing.T) {
 	}
 
 	storeID := c.storeIdentity()
-	_, found := etagCache.get(storeID, "test-project", "test-config", "", "")
+	_, found := etagCache.get(storeID, "test-project", "test-config", "", "", nil)
 	if !found {
 		t.Error("expected cache to be populated")
 	}
@@ -405,7 +498,7 @@ func TestCacheInvalidationOnDeleteSecret(t *testing.T) {
 		t.Fatalf("unexpected error deleting secret: %v", err)
 	}
 
-	_, found = etagCache.get(storeID, "test-project", "test-config", "", "")
+	_, found = etagCache.get(storeID, "test-project", "test-config", "", "", nil)
 	if found {
 		t.Error("expected cache to be invalidated after delete")
 	}
@@ -483,13 +576,13 @@ func TestSecretsCacheDisabled(t *testing.T) {
 
 	// Operations on nil cache should be no-ops (not panic)
 	var nilCache *secretsCache
-	entry, found := nilCache.get(testStore, "project", "config", "", "")
+	entry, found := nilCache.get(testStore, "project", "config", "", "", nil)
 	if found || entry != nil {
 		t.Error("expected nil cache get to return nil, false")
 	}
 
 	// set should be a no-op
-	nilCache.set(testStore, "project", "config", "", "", &cacheEntry{etag: "test"})
+	nilCache.set(testStore, "project", "config", "", "", nil, &cacheEntry{etag: "test"})
 
 	// invalidate should be a no-op
 	nilCache.invalidate(testStore, "project", "config")
@@ -502,7 +595,7 @@ func TestDisabledCacheDoesNotCacheSecrets(t *testing.T) {
 	fakeClient := &fake.DopplerClient{}
 
 	var callCount atomic.Int32
-	testSecrets := client.Secrets{"API_KEY": "secret-value"}
+	testSecrets := client.Secrets{"API_KEY": testAPIKeyValue}
 
 	fakeClient.WithSecretsFunc(func(_ client.SecretsRequest) (*client.SecretsResponse, error) {
 		callCount.Add(1)
@@ -557,12 +650,12 @@ func TestCacheIsolationBetweenStores(t *testing.T) {
 	entryB := &cacheEntry{etag: "etag-b", secrets: client.Secrets{"KEY": "value-b"}}
 
 	// Both stores use same project/config but should have separate cache entries
-	c.set(storeA, "server", "dev", "", "", entryA)
-	c.set(storeB, "server", "dev", "", "", entryB)
+	c.set(storeA, "server", "dev", "", "", nil, entryA)
+	c.set(storeB, "server", "dev", "", "", nil, entryB)
 
 	// Each store should get its own entry
-	gotA, foundA := c.get(storeA, "server", "dev", "", "")
-	gotB, foundB := c.get(storeB, "server", "dev", "", "")
+	gotA, foundA := c.get(storeA, "server", "dev", "", "", nil)
+	gotB, foundB := c.get(storeB, "server", "dev", "", "", nil)
 
 	if !foundA {
 		t.Error("expected cache hit for store A")
@@ -581,8 +674,8 @@ func TestCacheIsolationBetweenStores(t *testing.T) {
 	// Invalidating store A should not affect store B
 	c.invalidate(storeA, "server", "dev")
 
-	_, foundA = c.get(storeA, "server", "dev", "", "")
-	_, foundB = c.get(storeB, "server", "dev", "", "")
+	_, foundA = c.get(storeA, "server", "dev", "", "", nil)
+	_, foundB = c.get(storeB, "server", "dev", "", "", nil)
 
 	if foundA {
 		t.Error("expected cache miss for store A after invalidation")
