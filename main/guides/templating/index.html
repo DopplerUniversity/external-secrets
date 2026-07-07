@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../pictures/eso-round-logo.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -2212,6 +2212,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#extract-subject-alternative-names-sans-from-certificate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extract Subject Alternative Names (SANs) from Certificate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#rsa-decryption-data-from-provider" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2962,8 +2973,6 @@
       
         
       
-        
-      
     
     
     
@@ -3296,34 +3305,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../provider/device42/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Device42
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../provider/google-secrets-manager/" class="md-nav__link">
         
   
@@ -3500,34 +3481,6 @@
     
   
     Yandex Lockbox
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../provider/alibaba/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Alibaba Cloud
   
 
     
@@ -4228,6 +4181,34 @@
     
   
     Devolutions Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../provider/nebius-mysterybox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nebius MysteryBox
   
 
     
@@ -5083,6 +5064,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#extract-subject-alternative-names-sans-from-certificate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extract Subject Alternative Names (SANs) from Certificate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#rsa-decryption-data-from-provider" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5500,6 +5492,26 @@ NtFUGA95RGN9s+pl6XY0YARPHf5O76ErC1OZtDTR5RdyQfcM+94gYZsexsXl0aQO
 <span class="w">        </span><span class="nt">tls.crt</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{{</span><span class="nv"> </span><span class="s">.mysecret</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">filterPEM</span><span class="nv"> </span><span class="s">&quot;</span><span class="l l-Scalar l-Scalar-Plain">CERTIFICATE&quot; | filterCertChain &quot;leaf&quot; }}&quot;</span>
 <span class="w">        </span><span class="nt">tls.key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{{</span><span class="nv"> </span><span class="s">.mysecret</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">filterPEM</span><span class="nv"> </span><span class="s">&quot;</span><span class="l l-Scalar l-Scalar-Plain">PRIVATE KEY&quot; }}&quot;</span>
 </code></pre></div>
+<h3 id="extract-subject-alternative-names-sans-from-certificate">Extract Subject Alternative Names (SANs) from Certificate</h3>
+<p>You can use the <code>certSANs</code> function to extract Subject Alternative Names from a PEM-encoded certificate. It returns a list of all SANs including DNS names, IP addresses, email addresses, and URIs. This is useful when you need to know which domains or IPs a certificate covers.</p>
+<p>You can combine <code>certSANs</code> with <code>filterPEM</code> and <code>filterCertChain</code> to first extract the leaf certificate from a chain and then get its SANs:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">external-secrets.io/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ExternalSecret</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-sans-example</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># ...</span>
+<span class="w">  </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">engineVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v2</span>
+<span class="w">      </span><span class="nt">data</span><span class="p">:</span>
+<span class="w">        </span><span class="c1"># Store all SANs as a comma-separated string</span>
+<span class="w">        </span><span class="nt">sans</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;{{</span><span class="nv"> </span><span class="s">.certificate</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">filterPEM</span><span class="nv"> </span><span class="s">&quot;CERTIFICATE&quot;</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">filterCertChain</span><span class="nv"> </span><span class="s">&quot;leaf&quot;</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">certSANs</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">join</span><span class="nv"> </span><span class="s">&quot;,&quot;</span><span class="nv"> </span><span class="s">}}&#39;</span>
+<span class="w">        </span><span class="c1"># Store the first SAN (e.g. primary domain)</span>
+<span class="w">        </span><span class="nt">primary-domain</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;{{</span><span class="nv"> </span><span class="s">index</span><span class="nv"> </span><span class="s">(.certificate</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">filterPEM</span><span class="nv"> </span><span class="s">&quot;CERTIFICATE&quot;</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">filterCertChain</span><span class="nv"> </span><span class="s">&quot;leaf&quot;</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">certSANs)</span><span class="nv"> </span><span class="s">0</span><span class="nv"> </span><span class="s">}}&#39;</span>
+<span class="w">        </span><span class="c1"># Store SANs as a JSON array</span>
+<span class="w">        </span><span class="nt">sans-json</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;{{</span><span class="nv"> </span><span class="s">.certificate</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">filterPEM</span><span class="nv"> </span><span class="s">&quot;CERTIFICATE&quot;</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">filterCertChain</span><span class="nv"> </span><span class="s">&quot;leaf&quot;</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">certSANs</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">toJson</span><span class="nv"> </span><span class="s">}}&#39;</span>
+</code></pre></div>
 <h3 id="rsa-decryption-data-from-provider">RSA Decryption Data From Provider</h3>
 <p>When a provider returns RSA-encrypted values, you can decrypt them directly in the template using the <code>rsaDecrypt</code> functions (engine v2).
 <code>rsaDecrypt</code> performs decryption with the private key passed through the pipeline: <code>&lt;privateKeyPEM | rsaDecrypt "&lt;SCHEME&gt;" "&lt;HASH&gt;" &lt;ciphertext&gt; &gt;</code>. <code>SCHEME</code> and <code>HASH</code> are strings (for example, <code>"RSA-OAEP"</code> and <code>"SHA1"</code>). The third argument must be the ciphertext in binary form.</p>
@@ -5634,6 +5646,10 @@ created at the provider.</p>
 <tr>
 <td>filterCertChain</td>
 <td>Filters PEM block(s) with a specific certificate type (<code>leaf</code>, <code>intermediate</code> or <code>root</code>)  from a certificate chain of PEM blocks (PEM blocks with type <code>CERTIFICATE</code>).</td>
+</tr>
+<tr>
+<td>certSANs</td>
+<td>Extracts Subject Alternative Names (SANs) from a PEM-encoded certificate and returns them as a list of strings. Includes DNS names, IP addresses, email addresses, and URIs.</td>
 </tr>
 <tr>
 <td>jwkPublicKeyPem</td>

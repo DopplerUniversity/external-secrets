@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../pictures/eso-round-logo.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -2770,8 +2770,6 @@
       
         
       
-        
-      
     
     
     
@@ -3198,34 +3196,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../device42/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Device42
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../google-secrets-manager/" class="md-nav__link">
         
   
@@ -3402,34 +3372,6 @@
     
   
     Yandex Lockbox
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../alibaba/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Alibaba Cloud
   
 
     
@@ -4130,6 +4072,34 @@
     
   
     Devolutions Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nebius-mysterybox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nebius MysteryBox
   
 
     
@@ -5160,6 +5130,82 @@ secret:</p>
 <span class="w">          </span><span class="nt">env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
 <span class="w">        </span><span class="nt">name</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">regexp</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my.*secret&quot;</span>
+</code></pre></div></li>
+<li>Search the secrets by path:
+    <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">external-secrets.io/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ExternalSecret</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">csm-ext-secret</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">refreshInterval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<span class="w">  </span><span class="nt">secretStoreRef</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">csm</span>
+<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SecretStore</span>
+<span class="w">  </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-awesome-secret</span>
+<span class="w">    </span><span class="nt">creationPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Owner</span>
+<span class="w">  </span><span class="nt">dataFrom</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">find</span><span class="p">:</span><span class="w"> </span><span class="c1"># Get all secrets from the specified path</span>
+<span class="w">        </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;oss/snmp-auths&quot;</span>
+</code></pre></div></li>
+<li>Search the secrets by path with name filter:
+    <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">external-secrets.io/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ExternalSecret</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">csm-ext-secret</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">refreshInterval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<span class="w">  </span><span class="nt">secretStoreRef</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">csm</span>
+<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SecretStore</span>
+<span class="w">  </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-awesome-secret</span>
+<span class="w">    </span><span class="nt">creationPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Owner</span>
+<span class="w">  </span><span class="nt">dataFrom</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">find</span><span class="p">:</span><span class="w"> </span><span class="c1"># Get secrets from path matching the name pattern</span>
+<span class="w">        </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;oss/snmp-auths&quot;</span>
+<span class="w">        </span><span class="nt">name</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">regexp</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;.*&quot;</span>
+</code></pre></div></li>
+<li>Search the secrets by path with tags:
+    <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">external-secrets.io/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ExternalSecret</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">csm-ext-secret</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">refreshInterval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<span class="w">  </span><span class="nt">secretStoreRef</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">csm</span>
+<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SecretStore</span>
+<span class="w">  </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-awesome-secret</span>
+<span class="w">    </span><span class="nt">creationPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Owner</span>
+<span class="w">  </span><span class="nt">dataFrom</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">find</span><span class="p">:</span><span class="w"> </span><span class="c1"># Get secrets from path with specific tags</span>
+<span class="w">        </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;oss/snmp-auths&quot;</span>
+<span class="w">        </span><span class="nt">tags</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
+</code></pre></div></li>
+<li>Search the secrets by path with name and tags:
+    <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">external-secrets.io/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ExternalSecret</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">csm-ext-secret</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">refreshInterval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<span class="w">  </span><span class="nt">secretStoreRef</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">csm</span>
+<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SecretStore</span>
+<span class="w">  </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-awesome-secret</span>
+<span class="w">    </span><span class="nt">creationPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Owner</span>
+<span class="w">  </span><span class="nt">dataFrom</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">find</span><span class="p">:</span><span class="w"> </span><span class="c1"># Get secrets from path matching name pattern and tags</span>
+<span class="w">        </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;oss/snmp-auths&quot;</span>
+<span class="w">        </span><span class="nt">name</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">regexp</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;auth.*&quot;</span>
+<span class="w">        </span><span class="nt">tags</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">env</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
 </code></pre></div></li>
 </ul>
 
